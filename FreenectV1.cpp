@@ -71,10 +71,13 @@ void MyFreenectDevice::VideoCallback(void* video, uint32_t) {
             break;
         }
         case fn1_videoSource::IR_8BIT: {
-            // Promote 8-bit IR samples into the 16-bit irBuffer by shifting left 8.
+            // Store 8-bit IR samples pre-scaled to the same 10-bit-equivalent
+            // range used by IR_10BIT (0..1023). That lets the V1 IR Threshold
+            // slider (0..1023) behave consistently in both modes and keeps the
+            // downstream getIRFrame passthrough shift (<<6) correct for both.
             auto* ptr = static_cast<uint8_t*>(video);
             for (size_t i = 0; i < irBuffer.size(); ++i) {
-                irBuffer[i] = static_cast<uint16_t>(ptr[i]) << 8;
+                irBuffer[i] = static_cast<uint16_t>(ptr[i]) << 2;
             }
             hasNewIR = true;
             irReady = true;
@@ -311,10 +314,10 @@ bool MyFreenectDevice::getDepthFrame(std::vector<uint16_t>& out, depthFormatEnum
 }
 
 // Get IR frame, normalized by threshold [min,max] into full 16-bit range.
-// For IR_10BIT the raw range is [0..1023]; for IR_8BIT samples are shifted
-// into the upper byte in VideoCallback so the raw range is [0..65280].
-// The threshold is expressed in raw sample units so the UI can be consistent
-// across both 8-bit and 10-bit modes.
+// irBuffer always holds values in the 10-bit range [0..1023] regardless of
+// source: IR_10BIT is stored as-is, IR_8BIT is pre-shifted by 2 in
+// VideoCallback. The threshold slider operates in that same 10-bit range so
+// its behavior is consistent across 8-bit and 10-bit modes.
 bool MyFreenectDevice::getIRFrame(std::vector<uint16_t>& out, float irThreshMin, float irThreshMax) {
     const int srcWidth = WIDTH, srcHeight = HEIGHT;
     const int dstWidth = irWidth_, dstHeight = irHeight_;
